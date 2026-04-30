@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOMADE COIFFURE — Prise de Rendez-vous</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, push, set, onValue, remove, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyA87_oYB5yJz4xCSbKj1BN6KUviRzBa7RI",
+    authDomain: "nomade-coiffure-d1cd6.firebaseapp.com",
+    databaseURL: "https://nomade-coiffure-d1cd6-default-rtdb.firebaseio.com",
+    projectId: "nomade-coiffure-d1cd6",
+    storageBucket: "nomade-coiffure-d1cd6.firebasestorage.app",
+    messagingSenderId: "1098765432",
+    appId: "nomade-coiffure"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  // ── Expose to global scope ──
+  window._db = db;
+  window._ref = ref;
+  window._push = push;
+  window._set = set;
+  window._onValue = onValue;
+  window._remove = remove;
+  window._get = get;
+
+  // Listen to bookings in real time
+  onValue(ref(db, 'bookings'), (snap) => {
+    const data = snap.val() || {};
+    window._bookings = Object.entries(data).map(([k,v]) => ({...v, fbKey: k}));
+    if(window._onBookingsUpdate) window._onBookingsUpdate();
+  });
+
+  // Listen to slot config in real time
+  onValue(ref(db, 'slotConfig'), (snap) => {
+    const data = snap.val();
+    if(data) window._slotConfig = data;
+    else window._slotConfig = null;
+    if(window._onSlotsUpdate) window._onSlotsUpdate();
+  });
+
+  window._firebaseReady = true;
+  document.dispatchEvent(new Event('firebase-ready'));
+</script>
+<style>
+:root{
+  --gold:#c9a84c;--gold-light:#e8c97a;--gold-dark:#9a7a30;--gold-dim:rgba(201,168,76,0.12);
+  --bg:#06060a;--bg2:#0d0d14;--bg3:#121220;--card:#0f0f1a;--border:#1e1e30;
+  --border-gold:rgba(201,168,76,0.3);--text:#ede8df;--text-muted:#6a6478;
+  --red:#e05252;--red-dim:rgba(224,82,82,0.12);--green:#52c97a;--green-dim:rgba(82,201,122,0.12);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--gold-dark);}
+
+/* NAV */
+.nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:20px 40px;background:linear-gradient(to bottom,rgba(6,6,10,0.95),transparent);}
+.nav-logo{font-family:'Cormorant Garamond',serif;font-size:1.2rem;letter-spacing:0.25em;color:var(--gold);font-weight:600;text-transform:uppercase;}
+.nav-cta{padding:10px 28px;border:1px solid var(--gold);color:var(--gold);font-size:0.7rem;font-weight:600;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer;text-decoration:none;transition:all 0.3s;background:transparent;}
+.nav-cta:hover{background:var(--gold);color:#000;}
+
+/* HERO */
+.hero{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:100px 20px 60px;overflow:hidden;}
+.hero-bg{position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 30%,rgba(30,20,0,0.9) 0%,var(--bg) 70%);}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(201,168,76,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(201,168,76,0.04) 1px,transparent 1px);background-size:80px 80px;}
+.hero-glow{position:absolute;top:20%;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(201,168,76,0.08) 0%,transparent 70%);pointer-events:none;}
+.hero-content{position:relative;z-index:2;max-width:700px;}
+.hero-eyebrow{font-size:0.7rem;letter-spacing:0.4em;text-transform:uppercase;color:var(--gold);margin-bottom:30px;display:flex;align-items:center;justify-content:center;gap:16px;}
+.hero-eyebrow::before,.hero-eyebrow::after{content:'';flex:1;max-width:60px;height:1px;background:var(--gold-dark);}
+.hero-title{font-family:'Cormorant Garamond',serif;font-size:clamp(3rem,10vw,7rem);font-weight:700;line-height:0.9;color:var(--text);letter-spacing:-0.01em;}
+.hero-title em{display:block;color:var(--gold);font-style:italic;}
+.hero-subtitle{margin:30px 0 50px;font-size:0.85rem;color:var(--text-muted);letter-spacing:0.15em;text-transform:uppercase;}
+.hero-cta{display:inline-flex;align-items:center;gap:12px;padding:18px 52px;background:var(--gold);color:#000;font-weight:700;font-size:0.8rem;letter-spacing:0.25em;text-transform:uppercase;border:none;cursor:pointer;transition:all 0.3s;text-decoration:none;}
+.hero-cta:hover{background:var(--gold-light);transform:translateY(-2px);box-shadow:0 20px 60px rgba(201,168,76,0.25);}
+.hero-cta-arrow{transition:transform 0.3s;}
+.hero-cta:hover .hero-cta-arrow{transform:translateX(6px);}
+.hero-badge{margin-top:40px;font-size:0.7rem;color:var(--text-muted);display:flex;align-items:center;justify-content:center;gap:20px;}
+.hero-badge-sep{width:4px;height:4px;background:var(--gold-dark);transform:rotate(45deg);}
+
+/* SECTION */
+.booking-section{padding:80px 20px 120px;}
+.section-inner{max-width:660px;margin:0 auto;}
+.section-eyebrow{font-size:0.7rem;letter-spacing:0.35em;text-transform:uppercase;color:var(--gold);margin-bottom:16px;}
+.section-title{font-family:'Cormorant Garamond',serif;font-size:2.8rem;font-weight:700;color:var(--text);margin-bottom:8px;}
+.section-line{width:50px;height:2px;background:linear-gradient(to right,var(--gold),transparent);margin:20px 0 40px;}
+
+/* FIELDS */
+.field-block{margin-bottom:32px;}
+.field-label{font-size:0.65rem;font-weight:600;letter-spacing:0.3em;text-transform:uppercase;color:var(--text-muted);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.field-label .req{color:var(--gold);font-size:0.8rem;}
+.field-error-msg{color:var(--red);font-size:0.72rem;margin-top:8px;display:none;padding:6px 10px;background:var(--red-dim);border-left:2px solid var(--red);}
+.field-error-msg.show{display:block;}
+
+/* MODEL */
+.model-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px;}
+.model-card input{display:none;}
+.model-card label{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px 8px;border:1px solid var(--border);background:var(--card);cursor:pointer;transition:all 0.25s;text-align:center;min-height:90px;}
+.model-card label .mc-icon{font-size:1.6rem;}
+.model-card label .mc-name{font-size:0.72rem;font-weight:600;letter-spacing:0.08em;color:var(--text-muted);transition:color 0.2s;}
+.model-card label:hover{border-color:var(--gold-dark);background:var(--bg3);}
+.model-card input:checked+label{border-color:var(--gold);background:var(--gold-dim);box-shadow:inset 0 0 0 1px var(--gold-dark);}
+.model-card input:checked+label .mc-name{color:var(--gold);}
+.precision-field{display:none;margin-top:10px;}
+.precision-field.show{display:block;}
+
+/* TOGGLE */
+.toggle-row{display:flex;gap:0;}
+.toggle-opt input{display:none;}
+.toggle-opt label{display:block;padding:13px 36px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:0.78rem;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);transition:all 0.2s;}
+.toggle-opt:first-child label{border-right:none;}
+.toggle-opt label:hover{border-color:var(--gold-dark);color:var(--text);}
+.toggle-opt input:checked+label{background:var(--gold);color:#000;border-color:var(--gold);}
+
+/* DATE */
+.date-scroll{overflow-x:auto;padding-bottom:8px;}
+.date-grid{display:flex;gap:8px;min-width:max-content;}
+.date-opt input{display:none;}
+.date-opt label{display:flex;flex-direction:column;align-items:center;width:72px;padding:12px 4px;border:1px solid var(--border);background:var(--card);cursor:pointer;transition:all 0.2s;}
+.date-opt label .d-name{font-size:0.6rem;letter-spacing:0.15em;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;}
+.date-opt label .d-num{font-size:1.4rem;font-weight:700;font-family:'Cormorant Garamond',serif;line-height:1;}
+.date-opt label .d-month{font-size:0.6rem;color:var(--text-muted);margin-top:2px;}
+.date-opt label .d-slots{font-size:0.58rem;color:var(--gold-dark);margin-top:4px;}
+.date-opt label:hover{border-color:var(--gold-dark);}
+.date-opt input:checked+label{border-color:var(--gold);background:var(--gold-dim);}
+.date-opt input:checked+label .d-num,.date-opt input:checked+label .d-name{color:var(--gold);}
+.date-opt.no-slots label{opacity:0.35;cursor:not-allowed;}
+
+/* TIME */
+.time-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;}
+.time-slot-opt input{display:none;}
+.time-slot-opt label{display:block;padding:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;text-align:center;font-family:'Cormorant Garamond',serif;font-size:1rem;transition:all 0.2s;letter-spacing:0.05em;}
+.time-slot-opt label:hover{border-color:var(--gold-dark);}
+.time-slot-opt input:checked+label{border-color:var(--gold);background:var(--gold-dim);color:var(--gold);}
+.time-slot-opt.booked label,.time-slot-opt.past label,.time-slot-opt.soon label,.time-slot-opt.admin-off label{opacity:0.35;cursor:not-allowed;pointer-events:none;}
+.time-slot-opt.booked label{background:rgba(224,82,82,0.06);border-color:rgba(224,82,82,0.2);text-decoration:line-through;color:var(--red);opacity:0.5;}
+.time-slot-opt.soon label{background:rgba(224,82,82,0.06);border-color:rgba(224,82,82,0.15);}
+.time-legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;font-size:0.62rem;color:var(--text-muted);}
+.tl-item{display:flex;align-items:center;gap:5px;}
+.tl-dot{width:8px;height:8px;}
+.tl-dot.free{background:var(--border);}
+.tl-dot.taken{background:rgba(224,82,82,0.4);}
+.tl-dot.off{background:rgba(106,100,120,0.3);}
+
+/* INPUT */
+.text-input{width:100%;background:var(--card);border:1px solid var(--border);color:var(--text);padding:14px 18px;font-family:'DM Sans',sans-serif;font-size:0.85rem;outline:none;transition:border-color 0.2s;-webkit-appearance:none;}
+.text-input:focus{border-color:var(--gold);}
+.text-input.has-error{border-color:var(--red);}
+.text-input::placeholder{color:var(--text-muted);}
+select.text-input{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236a6478' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;padding-right:40px;}
+select.text-input option{background:#0f0f1a;}
+.location-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+/* ALERT */
+.alert{padding:12px 16px;font-size:0.78rem;margin-bottom:16px;display:none;border-left:3px solid;}
+.alert.show{display:flex;align-items:flex-start;gap:10px;}
+.alert.error{background:var(--red-dim);border-color:var(--red);color:var(--red);}
+.alert.info{background:rgba(201,168,76,0.08);border-color:var(--gold-dark);color:var(--gold);}
+
+/* PRICE */
+.price-card{background:var(--card);border:1px solid var(--border-gold);padding:28px;margin-bottom:28px;display:none;position:relative;overflow:hidden;}
+.price-card::before{content:'TARIF';position:absolute;top:16px;right:20px;font-size:0.55rem;letter-spacing:0.4em;color:var(--gold-dark);}
+.price-card.show{display:block;}
+.price-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:0.8rem;}
+.price-row:last-of-type{border:none;}
+.price-row .label{color:var(--text-muted);}
+.price-row .amount{font-weight:600;}
+.price-total-row{display:flex;justify-content:space-between;align-items:center;padding:14px 0 0;border-top:1px solid var(--border-gold);margin-top:8px;}
+.price-total-label{font-size:0.7rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-muted);}
+.price-total-amount{font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:700;color:var(--gold);}
+.price-no-tarif{font-size:0.8rem;color:var(--text-muted);font-style:italic;}
+
+/* SUBMIT */
+.submit-btn{width:100%;padding:20px;background:var(--gold);color:#000;font-family:'DM Sans',sans-serif;font-weight:700;font-size:0.85rem;letter-spacing:0.25em;text-transform:uppercase;border:none;cursor:pointer;transition:all 0.3s;margin-top:8px;}
+.submit-btn:hover{background:var(--gold-light);box-shadow:0 10px 40px rgba(201,168,76,0.25);}
+.submit-btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+/* SUCCESS */
+.success-screen{display:none;text-align:center;padding:60px 20px;}
+.success-screen.show{display:block;}
+.success-icon{font-size:5rem;margin-bottom:24px;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.05);}}
+.success-title{font-family:'Cormorant Garamond',serif;font-size:2.5rem;color:var(--gold);margin-bottom:12px;}
+.success-msg{color:var(--text-muted);font-size:0.9rem;line-height:1.7;margin-bottom:30px;}
+.success-card{background:var(--card);border:1px solid var(--border-gold);padding:24px;text-align:left;margin-bottom:30px;}
+.sc-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.82rem;}
+.sc-row:last-child{border:none;}
+.sc-row .label{color:var(--text-muted);}
+.new-rdv-btn{display:inline-block;padding:14px 36px;border:1px solid var(--gold);color:var(--gold);font-size:0.75rem;font-weight:600;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer;background:transparent;transition:all 0.3s;}
+.new-rdv-btn:hover{background:var(--gold);color:#000;}
+
+/* LOADING */
+.loading-overlay{position:fixed;inset:0;background:rgba(6,6,10,0.8);z-index:999;display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
+.loading-overlay.show{display:flex;}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{color:var(--text-muted);font-size:0.78rem;letter-spacing:0.2em;}
+
+/* ADMIN */
+.admin-trigger{text-align:center;padding:30px;color:var(--border);font-size:0.65rem;letter-spacing:0.2em;cursor:pointer;user-select:none;transition:color 0.3s;}
+.admin-trigger:hover{color:var(--text-muted);}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(6,6,10,0.92);z-index:500;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.modal-overlay.show{display:flex;}
+.modal-box{background:var(--bg2);border:1px solid var(--border);padding:48px;max-width:380px;width:90%;text-align:center;}
+.modal-title{font-family:'Cormorant Garamond',serif;font-size:1.8rem;color:var(--gold);margin-bottom:8px;}
+.modal-sub{color:var(--text-muted);font-size:0.78rem;margin-bottom:28px;}
+.modal-input{width:100%;background:var(--card);border:1px solid var(--border);color:var(--text);padding:14px 18px;font-family:'DM Sans',sans-serif;font-size:1rem;outline:none;text-align:center;letter-spacing:0.3em;margin-bottom:12px;}
+.modal-input:focus{border-color:var(--gold);}
+.modal-btn{width:100%;padding:14px;background:var(--gold);color:#000;font-weight:700;font-size:0.8rem;letter-spacing:0.2em;text-transform:uppercase;border:none;cursor:pointer;}
+.modal-error{color:var(--red);font-size:0.75rem;margin-bottom:12px;display:none;}
+.modal-error.show{display:block;}
+.modal-close{margin-top:14px;color:var(--text-muted);font-size:0.72rem;cursor:pointer;}
+.modal-close:hover{color:var(--text);}
+
+.admin-panel{display:none;background:var(--bg2);border-top:1px solid var(--border);}
+.admin-panel.show{display:block;}
+.admin-header{background:var(--card);border-bottom:2px solid var(--gold);padding:20px 40px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.admin-logo{font-family:'Cormorant Garamond',serif;font-size:1.2rem;color:var(--gold);letter-spacing:0.2em;}
+.admin-logo small{display:block;font-size:0.55rem;letter-spacing:0.4em;color:var(--text-muted);font-family:'DM Sans',sans-serif;}
+.admin-logout{padding:8px 20px;border:1px solid var(--border);color:var(--text-muted);font-size:0.68rem;letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;background:transparent;transition:all 0.2s;}
+.admin-logout:hover{border-color:var(--red);color:var(--red);}
+.admin-body{max-width:960px;margin:0 auto;padding:40px 20px;}
+.admin-tabs{display:flex;gap:0;margin-bottom:32px;border-bottom:1px solid var(--border);}
+.a-tab{padding:12px 28px;background:transparent;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--text-muted);font-family:'DM Sans',sans-serif;font-size:0.75rem;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;transition:all 0.2s;}
+.a-tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+.a-content{display:none;}
+.a-content.active{display:block;}
+
+/* BOOKINGS TABLE */
+.bookings-wrap{overflow-x:auto;}
+table.b-table{width:100%;border-collapse:collapse;font-size:0.78rem;}
+table.b-table th{padding:12px 14px;text-align:left;border-bottom:1px solid var(--gold-dark);color:var(--gold);font-size:0.62rem;letter-spacing:0.2em;text-transform:uppercase;white-space:nowrap;}
+table.b-table td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top;}
+table.b-table tr:hover td{background:rgba(201,168,76,0.03);}
+.b-empty{text-align:center;padding:48px;color:var(--text-muted);font-size:0.85rem;}
+.badge{display:inline-block;padding:3px 10px;font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;}
+.badge-gold{background:var(--gold);color:#000;}
+.badge-green{background:var(--green-dim);color:var(--green);border:1px solid var(--green);}
+.del-btn{padding:4px 10px;background:transparent;border:1px solid rgba(224,82,82,0.3);color:var(--red);font-size:0.65rem;cursor:pointer;transition:all 0.2s;}
+.del-btn:hover{background:var(--red-dim);}
+
+/* SLOT MANAGER */
+.day-panel{background:var(--card);border:1px solid var(--border);padding:24px;margin-bottom:12px;}
+.day-panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;}
+.day-name-badge{font-size:0.78rem;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);}
+.slot-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+.slot-chip{padding:6px 12px;border:1px solid var(--border);background:var(--bg3);font-size:0.72rem;font-weight:600;cursor:pointer;transition:all 0.2s;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:6px;}
+.slot-chip.on{border-color:var(--green);color:var(--green);}
+.slot-chip.off{border-color:rgba(224,82,82,0.4);color:var(--red);opacity:0.7;}
+.slot-chip .dot{width:6px;height:6px;border-radius:50%;}
+.slot-chip.on .dot{background:var(--green);}
+.slot-chip.off .dot{background:var(--red);}
+.add-slot-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+.add-slot-input{flex:1;min-width:120px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 14px;font-family:'DM Sans',sans-serif;font-size:0.8rem;outline:none;}
+.add-slot-input:focus{border-color:var(--gold-dark);}
+.add-slot-btn{padding:8px 20px;background:var(--gold-dim);border:1px solid var(--gold-dark);color:var(--gold);font-size:0.7rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;white-space:nowrap;}
+.add-slot-btn:hover{background:var(--gold);color:#000;}
+
+/* QR */
+.qr-section{display:flex;flex-direction:column;align-items:center;gap:24px;padding:40px 0;}
+.qr-box{background:#fff;padding:24px;display:inline-block;}
+.qr-url-input{width:100%;max-width:460px;background:var(--card);border:1px solid var(--border);color:var(--text);padding:13px 18px;font-family:'DM Sans',sans-serif;font-size:0.82rem;outline:none;}
+.qr-url-input:focus{border-color:var(--gold);}
+.qr-regen-btn{padding:12px 32px;background:var(--gold);color:#000;font-weight:700;font-size:0.75rem;letter-spacing:0.2em;text-transform:uppercase;border:none;cursor:pointer;}
+.qr-note{font-size:0.72rem;color:var(--text-muted);text-align:center;max-width:400px;line-height:1.6;}
+
+/* STATS */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:28px;}
+.stat-card{background:var(--card);border:1px solid var(--border);padding:20px;text-align:center;}
+.stat-num{font-family:'Cormorant Garamond',serif;font-size:2.2rem;color:var(--gold);font-weight:700;}
+.stat-label{font-size:0.62rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-muted);margin-top:4px;}
+
+/* FOOTER */
+.footer{text-align:center;padding:30px;color:var(--text-muted);font-size:0.68rem;letter-spacing:0.15em;border-top:1px solid var(--border);}
+
+@media(max-width:520px){
+  .nav{padding:16px 20px;}
+  .model-grid{grid-template-columns:repeat(3,1fr);}
+  .location-grid{grid-template-columns:1fr;}
+  .toggle-opt label{padding:12px 20px;}
+  .admin-header{padding:16px 20px;}
+  .admin-body{padding:24px 16px;}
+}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Enregistrement en cours…</div>
+</div>
+
+<!-- NAV -->
+<nav class="nav">
+  <span class="nav-logo">Nomade Coiffure</span>
+  <a href="#rdv" class="nav-cta">Prendre RDV</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-eyebrow">Coiffure à domicile · UCAD</div>
+    <h1 class="hero-title">NOMADE<em>Coiffure</em></h1>
+    <p class="hero-subtitle">Service de coiffure professionnel pour étudiants</p>
+    <a href="#rdv" class="hero-cta">Réserver maintenant <span class="hero-cta-arrow">→</span></a>
+    <div class="hero-badge">
+      <span>Rapide</span><span class="hero-badge-sep"></span>
+      <span>À domicile</span><span class="hero-badge-sep"></span>
+      <span>Accessible</span>
+    </div>
+  </div>
+</section>
+
+<!-- BOOKING -->
+<section class="booking-section" id="rdv">
+  <div class="section-inner">
+    <div class="section-eyebrow">Réservation en ligne</div>
+    <h2 class="section-title">Prendre Rendez-vous</h2>
+    <div class="section-line"></div>
+
+    <div id="bookingForm">
+      <!-- MODELE -->
+      <div class="field-block" id="fb-model">
+        <div class="field-label">Modèle de coiffure <span class="req">★</span></div>
+        <div class="model-grid">
+          <div class="model-card"><input type="radio" name="model" id="m1" value="Rasé simple"><label for="m1"><span class="mc-icon">✂️</span><span class="mc-name">Rasé Simple</span></label></div>
+          <div class="model-card"><input type="radio" name="model" id="m2" value="Rasé Dégradé"><label for="m2"><span class="mc-icon">💈</span><span class="mc-name">Rasé Dégradé</span></label></div>
+          <div class="model-card"><input type="radio" name="model" id="m3" value="Dégradé"><label for="m3"><span class="mc-icon">🔲</span><span class="mc-name">Dégradé</span></label></div>
+          <div class="model-card"><input type="radio" name="model" id="m4" value="Taper"><label for="m4"><span class="mc-icon">🎯</span><span class="mc-name">Taper</span></label></div>
+          <div class="model-card"><input type="radio" name="model" id="m5" value="Autre"><label for="m5"><span class="mc-icon">✏️</span><span class="mc-name">Autre</span></label></div>
+        </div>
+        <div class="precision-field" id="modelPrecisionWrap">
+          <input type="text" class="text-input" id="modelPrecision" placeholder="Précisez votre coiffure…" maxlength="80">
+        </div>
+        <div class="field-error-msg" id="err-model">Veuillez choisir un modèle de coiffure.</div>
+      </div>
+
+      <!-- BARBE -->
+      <div class="field-block">
+        <div class="field-label">Barbe <span class="req">★</span> <small style="color:var(--gold-dark);font-size:0.6rem;font-style:italic;">+100 F si OUI</small></div>
+        <div class="toggle-row">
+          <div class="toggle-opt"><input type="radio" name="barbe" id="barbe-oui" value="OUI"><label for="barbe-oui">OUI</label></div>
+          <div class="toggle-opt"><input type="radio" name="barbe" id="barbe-non" value="NON"><label for="barbe-non">NON</label></div>
+        </div>
+        <div class="field-error-msg" id="err-barbe">Veuillez répondre pour la barbe.</div>
+      </div>
+
+      <!-- TEINTE -->
+      <div class="field-block">
+        <div class="field-label">Teinte Noir <span class="req">★</span> <small style="color:var(--gold-dark);font-size:0.6rem;font-style:italic;">+100 F si OUI</small></div>
+        <div class="toggle-row">
+          <div class="toggle-opt"><input type="radio" name="teinte" id="teinte-oui" value="OUI"><label for="teinte-oui">OUI</label></div>
+          <div class="toggle-opt"><input type="radio" name="teinte" id="teinte-non" value="NON"><label for="teinte-non">NON</label></div>
+        </div>
+        <div class="field-error-msg" id="err-teinte">Veuillez répondre pour la teinte.</div>
+      </div>
+
+      <!-- DATE -->
+      <div class="field-block" id="fb-date">
+        <div class="field-label">Date <span class="req">★</span></div>
+        <div class="date-scroll"><div class="date-grid" id="dateGrid"></div></div>
+        <div class="field-error-msg" id="err-date">Veuillez choisir une date.</div>
+      </div>
+
+      <!-- HEURE -->
+      <div class="field-block" id="fb-heure" style="display:none;">
+        <div class="field-label">Heure <span class="req">★</span></div>
+        <div class="alert info" id="slotInfo"></div>
+        <div class="alert error" id="slotWarn"></div>
+        <div class="time-grid" id="timeGrid"></div>
+        <div class="time-legend">
+          <div class="tl-item"><div class="tl-dot free"></div><span>Disponible</span></div>
+          <div class="tl-item"><div class="tl-dot taken"></div><span>Pris / Passé</span></div>
+          <div class="tl-item"><div class="tl-dot off"></div><span>Indisponible</span></div>
+        </div>
+        <div class="field-error-msg" id="err-heure">Veuillez choisir un créneau horaire.</div>
+      </div>
+
+      <!-- LOCALISATION -->
+      <div class="field-block">
+        <div class="field-label">Localisation <span class="req">★</span></div>
+        <div class="location-grid" style="margin-bottom:10px;">
+          <input type="text" class="text-input" id="locChambre" placeholder="Chambre (ex: 100)" maxlength="10">
+          <input type="text" class="text-input" id="locPavillon" placeholder="Pavillon (ex: A)" maxlength="5">
+        </div>
+        <div style="margin-bottom:10px;">
+          <select class="text-input" id="locLieu" onchange="toggleLocAutre()">
+            <option value="">— Choisir le lieu —</option>
+            <option value="AMSA">AMSA</option>
+            <option value="CAMPUS UCAD">CAMPUS UCAD</option>
+            <option value="ECOLE NORMALE">ECOLE NORMALE</option>
+            <option value="ESP">ESP</option>
+            <option value="AUTRE">AUTRE (préciser ci-dessous)</option>
+          </select>
+        </div>
+        <div id="locAutreWrap" style="display:none;">
+          <input type="text" class="text-input" id="locAutre" placeholder="Précisez le lieu (ex: Claudel)" maxlength="60">
+        </div>
+        <div class="field-error-msg" id="err-loc">Veuillez indiquer votre localisation complète.</div>
+      </div>
+
+      <!-- NUMERO -->
+      <div class="field-block">
+        <div class="field-label">Numéro de téléphone <span class="req">★</span></div>
+        <input type="tel" class="text-input" id="phone" placeholder="ex: 771234567" maxlength="15">
+        <div class="field-error-msg" id="err-num">Veuillez entrer un numéro valide (9 chiffres).</div>
+      </div>
+
+      <!-- PRICE -->
+      <div class="price-card" id="priceCard">
+        <div id="priceRows"></div>
+        <div class="price-total-row">
+          <span class="price-total-label">Total à payer</span>
+          <span class="price-total-amount" id="priceTotal">—</span>
+        </div>
+      </div>
+
+      <div class="alert error" id="globalAlert"></div>
+      <button class="submit-btn" id="submitBtn" onclick="handleSubmit()">✓ &nbsp;Confirmer le Rendez-vous</button>
+      <p style="text-align:center;margin-top:16px;font-size:0.68rem;color:var(--text-muted);">Les champs marqués <span style="color:var(--gold);">★</span> sont obligatoires.</p>
+    </div>
+
+    <!-- SUCCESS -->
+    <div class="success-screen" id="successScreen">
+      <div class="success-icon">✅</div>
+      <h2 class="success-title">Rendez-vous Confirmé !</h2>
+      <p class="success-msg">Votre réservation a bien été enregistrée.<br>Soyez prêt à l'heure choisie. À tout de suite !</p>
+      <div class="success-card" id="successDetails"></div>
+      <div style="margin-top:24px;"><button class="new-rdv-btn" onclick="resetForm()">Nouveau Rendez-vous</button></div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">© 2025 NOMADE COIFFURE · Service étudiant UCAD · Dakar, Sénégal</footer>
+<div class="admin-trigger" onclick="showAdminLogin()">◆ espace admin ◆</div>
+
+<!-- LOGIN MODAL -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal-box">
+    <div class="modal-title">Accès Admin</div>
+    <div class="modal-sub">Entrez le mot de passe administrateur</div>
+    <div class="modal-error" id="loginError">Mot de passe incorrect.</div>
+    <input type="password" class="modal-input" id="adminPassInput" placeholder="••••••••" onkeyup="if(event.key==='Enter')checkAdmin()">
+    <button class="modal-btn" onclick="checkAdmin()">Entrer</button>
+    <div class="modal-close" onclick="closeLoginModal()">Annuler</div>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div class="admin-panel" id="adminPanel">
+  <div class="admin-header">
+    <div class="admin-logo">NOMADE COIFFURE<small>Tableau de bord administrateur</small></div>
+    <button class="admin-logout" onclick="adminLogout()">Déconnexion</button>
+  </div>
+  <div class="admin-body">
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-num" id="statTotal">0</div><div class="stat-label">RDV Total</div></div>
+      <div class="stat-card"><div class="stat-num" id="statToday">0</div><div class="stat-label">Aujourd'hui</div></div>
+      <div class="stat-card"><div class="stat-num" id="statWeek">0</div><div class="stat-label">Cette semaine</div></div>
+      <div class="stat-card"><div class="stat-num" id="statRevenue">0</div><div class="stat-label">Revenus (F)</div></div>
+    </div>
+    <div class="admin-tabs">
+      <button class="a-tab active" onclick="switchTab('bookings',this)">Réservations</button>
+      <button class="a-tab" onclick="switchTab('slots',this)">Créneaux</button>
+      <button class="a-tab" onclick="switchTab('qr',this)">QR Code</button>
+    </div>
+    <div class="a-content active" id="tab-bookings">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+        <span style="font-size:0.75rem;color:var(--text-muted);">Liste de toutes les réservations (temps réel)</span>
+        <button class="del-btn" onclick="clearAllBookings()">Tout effacer</button>
+      </div>
+      <div class="bookings-wrap">
+        <table class="b-table">
+          <thead><tr><th>#</th><th>Date & Heure</th><th>Modèle</th><th>Extras</th><th>Localisation</th><th>Numéro</th><th>Tarif</th><th></th></tr></thead>
+          <tbody id="bookingsTbody"><tr><td colspan="8" class="b-empty">Chargement…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="a-content" id="tab-slots">
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:20px;">Cliquez sur un créneau pour l'activer / désactiver. Les modifications sont sauvegardées en temps réel.</p>
+      <div id="slotManager"></div>
+    </div>
+    <div class="a-content" id="tab-qr">
+      <div class="qr-section">
+        <div style="text-align:center;">
+          <div class="field-label" style="justify-content:center;margin-bottom:12px;">URL de votre site</div>
+          <input type="text" class="qr-url-input" id="qrUrlInput" placeholder="https://abdourdiallo14-lab.github.io/nomade-coiffure/">
+          <br><br>
+          <button class="qr-regen-btn" onclick="generateQR()">Générer / Mettre à jour le QR</button>
+        </div>
+        <div class="qr-box" id="qrCanvas"></div>
+        <p class="qr-note">Scannez ce QR Code ou intégrez-le dans votre affiche.<br>Clic droit → "Enregistrer l'image" pour télécharger.</p>
+        <button class="qr-regen-btn" onclick="downloadQR()" style="background:var(--gold-dim);color:var(--gold);border:1px solid var(--gold-dark);">⬇ Télécharger le QR Code</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const ADMIN_PASS = 'Nomade2025';
+const PRICES_MAP = {'Rasé simple':500,'Rasé Dégradé':600,'Dégradé':700,'Taper':700,'Autre':null};
+const DAY_NAMES  = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+const DAY_FULL   = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+const MONTHS     = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+
+function makeSlots(start,endStart){
+  const s=[],toM=t=>{const[h,m]=t.split(':').map(Number);return h*60+m;};
+  const fM=m=>`${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+  let c=toM(start),e=toM(endStart);
+  while(c<=e){s.push(fM(c));c+=30;}
+  return s;
+}
+
+const DEFAULT_SCHEDULE = {
+  0:[...makeSlots('12:00','22:00')],
+  1:[...makeSlots('12:30','13:30'),...makeSlots('17:00','21:00')],
+  2:[...makeSlots('13:00','13:30'),...makeSlots('17:30','21:00')],
+  3:[...makeSlots('12:00','14:00'),...makeSlots('18:00','21:00')],
+  4:[...makeSlots('13:00','13:30'),...makeSlots('17:30','21:00')],
+  5:[...makeSlots('17:00','21:00')],
+  6:[...makeSlots('12:00','22:00')]
+};
+
+window._bookings = [];
+window._slotConfig = null;
+
+function getSlots(dow){
+  if(window._slotConfig && window._slotConfig[dow]) return window._slotConfig[dow];
+  return DEFAULT_SCHEDULE[dow]||[];
+}
+
+function dateStr2today(){
+  const n=new Date();
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+}
+function formatDate(dateStr){
+  const d=new Date(dateStr+'T12:00:00');
+  return `${DAY_FULL[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+function addHalf(t){
+  const [h,m]=t.split(':').map(Number);
+  const nm=m+30;
+  return `${String(nm>=60?h+1:h).padStart(2,'0')}:${String(nm%60).padStart(2,'0')}`;
+}
+
+function isSlotBooked(date,time){
+  return (window._bookings||[]).some(b=>b.date===date&&b.time===time);
+}
+
+function slotStatus(dateStr,time){
+  if(isSlotBooked(dateStr,time)) return 'booked';
+  const dow=new Date(dateStr+'T12:00:00').getDay();
+  const slots=getSlots(dow);
+  if(!slots.includes(time)) return 'admin-off';
+  const now=new Date();
+  const todayStr=dateStr2today();
+  if(dateStr===todayStr){
+    const [h,m]=time.split(':').map(Number);
+    const slotDate=new Date(); slotDate.setHours(h,m,0,0);
+    const diffMin=(slotDate-now)/60000;
+    if(diffMin<=0) return 'past';
+    if(diffMin<=30) return 'soon';
+  } else {
+    if(new Date(dateStr+'T'+time+':00')<now) return 'past';
+  }
+  return 'ok';
+}
+
+// ── State ──
+let selectedDate=null, selectedTime=null;
+
+// ── On firebase ready ──
+document.addEventListener('firebase-ready',()=>{
+  window._onBookingsUpdate = () => {
+    buildDateGrid();
+    if(selectedDate) buildTimeGrid(selectedDate);
+    if(document.getElementById('adminPanel').classList.contains('show')){
+      updateStats(); renderBookingsTable();
+    }
+  };
+  window._onSlotsUpdate = () => {
+    buildDateGrid();
+    if(selectedDate) buildTimeGrid(selectedDate);
+    if(document.getElementById('adminPanel').classList.contains('show')) renderSlotManager();
+  };
+  buildDateGrid();
+});
+
+// ── FORM LISTENERS ──
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('input[name="model"]').forEach(r=>r.addEventListener('change',()=>{
+    document.getElementById('modelPrecisionWrap').classList.toggle('show',r.value==='Autre');
+    updatePrice(); clearErr('err-model');
+  }));
+  document.querySelectorAll('input[name="barbe"]').forEach(r=>r.addEventListener('change',()=>{updatePrice();clearErr('err-barbe');}));
+  document.querySelectorAll('input[name="teinte"]').forEach(r=>r.addEventListener('change',()=>{updatePrice();clearErr('err-teinte');}));
+  document.getElementById('phone').addEventListener('input',()=>clearErr('err-num'));
+});
+
+function toggleLocAutre(){
+  const v=document.getElementById('locLieu').value;
+  document.getElementById('locAutreWrap').style.display=(v==='AUTRE')?'block':'none';
+  clearErr('err-loc');
+}
+
+// ── DATE GRID ──
+function buildDateGrid(){
+  const grid=document.getElementById('dateGrid');
+  grid.innerHTML='';
+  const today=new Date();
+  for(let i=0;i<14;i++){
+    const d=new Date(today); d.setDate(today.getDate()+i);
+    const dow=d.getDay();
+    const dateStr=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const slots=getSlots(dow);
+    let avail=0;
+    slots.forEach(t=>{if(slotStatus(dateStr,t)==='ok')avail++;});
+    const noSlots=slots.length===0;
+    const id=`date_${dateStr}`;
+    const wrap=document.createElement('div');
+    wrap.className='date-opt'+(noSlots?' no-slots':'');
+    wrap.innerHTML=`<input type="radio" name="date" id="${id}" value="${dateStr}" ${noSlots?'disabled':''} onchange="onDateChange('${dateStr}')"><label for="${id}"><span class="d-name">${DAY_NAMES[dow]}</span><span class="d-num">${d.getDate()}</span><span class="d-month">${MONTHS[d.getMonth()]}</span><span class="d-slots">${noSlots?'—':avail+' dispo'}</span></label>`;
+    grid.appendChild(wrap);
+  }
+}
+
+function onDateChange(dateStr){
+  selectedDate=dateStr; selectedTime=null;
+  clearErr('err-date'); clearErr('err-heure');
+  buildTimeGrid(dateStr);
+  document.getElementById('fb-heure').style.display='block';
+}
+
+function buildTimeGrid(dateStr){
+  const grid=document.getElementById('timeGrid');
+  const info=document.getElementById('slotInfo');
+  const warn=document.getElementById('slotWarn');
+  grid.innerHTML=''; info.classList.remove('show'); warn.classList.remove('show');
+  const dow=new Date(dateStr+'T12:00:00').getDay();
+  const slots=getSlots(dow);
+  if(!slots.length){grid.innerHTML='<p style="color:var(--text-muted);font-size:0.8rem;padding:16px 0;">Aucun créneau disponible ce jour.</p>';return;}
+  let hasSoon=false;
+  slots.forEach(t=>{
+    const st=slotStatus(dateStr,t);
+    if(st==='soon') hasSoon=true;
+    const id=`slot_${t.replace(':','_')}`;
+    const div=document.createElement('div');
+    div.className=`time-slot-opt ${st==='ok'?'':st}`;
+    div.innerHTML=`<input type="radio" name="time" id="${id}" value="${t}" ${st!=='ok'?'disabled':''} onchange="onTimeChange('${t}','${st}')"><label for="${id}">${t}</label>`;
+    grid.appendChild(div);
+  });
+  if(hasSoon){warn.innerHTML='⚠️ Les créneaux grisés sont bloqués (moins de 30 min).';warn.classList.add('show');warn.style.display='flex';}
+  info.innerHTML=`📅 ${formatDate(dateStr)} — Cliquez sur un créneau disponible.`;
+  info.classList.add('show');
+}
+
+function onTimeChange(time,st){if(st!=='ok')return;selectedTime=time;clearErr('err-heure');}
+
+// ── PRICE ──
+function updatePrice(){
+  const model=document.querySelector('input[name="model"]:checked')?.value;
+  const barbe=document.querySelector('input[name="barbe"]:checked')?.value;
+  const teinte=document.querySelector('input[name="teinte"]:checked')?.value;
+  const card=document.getElementById('priceCard');
+  if(!model){card.classList.remove('show');return;}
+  const baseP=PRICES_MAP[model];
+  card.classList.add('show');
+  if(baseP===null){
+    document.getElementById('priceRows').innerHTML='<div class="price-no-tarif">Modèle personnalisé — tarif à convenir sur place.</div>';
+    document.getElementById('priceTotal').textContent='À définir';
+    return;
+  }
+  let t=baseP;
+  const bAdd=(barbe==='OUI')?100:0, tAdd=(teinte==='OUI')?100:0;
+  t+=bAdd+tAdd;
+  let html=`<div class="price-row"><span class="label">${model}</span><span class="amount">${baseP} F</span></div>`;
+  if(barbe==='OUI') html+=`<div class="price-row"><span class="label">+ Barbe</span><span class="amount">+100 F</span></div>`;
+  if(teinte==='OUI') html+=`<div class="price-row"><span class="label">+ Teinte Noir</span><span class="amount">+100 F</span></div>`;
+  document.getElementById('priceRows').innerHTML=html;
+  document.getElementById('priceTotal').textContent=t+' F CFA';
+}
+
+function getTotal(){
+  const model=document.querySelector('input[name="model"]:checked')?.value;
+  const barbe=document.querySelector('input[name="barbe"]:checked')?.value;
+  const teinte=document.querySelector('input[name="teinte"]:checked')?.value;
+  if(!model||PRICES_MAP[model]===null) return null;
+  let t=PRICES_MAP[model];
+  if(barbe==='OUI') t+=100;
+  if(teinte==='OUI') t+=100;
+  return t;
+}
+
+// ── HELPERS ──
+function showErr(id){document.getElementById(id).classList.add('show');}
+function clearErr(id){const el=document.getElementById(id);if(el)el.classList.remove('show');}
+
+// ── SUBMIT ──
+async function handleSubmit(){
+  let valid=true;
+  document.getElementById('globalAlert').classList.remove('show');
+  const model=document.querySelector('input[name="model"]:checked')?.value;
+  if(!model){showErr('err-model');valid=false;}else clearErr('err-model');
+  const barbe=document.querySelector('input[name="barbe"]:checked')?.value;
+  if(!barbe){showErr('err-barbe');valid=false;}else clearErr('err-barbe');
+  const teinte=document.querySelector('input[name="teinte"]:checked')?.value;
+  if(!teinte){showErr('err-teinte');valid=false;}else clearErr('err-teinte');
+  if(!selectedDate){showErr('err-date');valid=false;}else clearErr('err-date');
+  if(!selectedTime){showErr('err-heure');valid=false;}else clearErr('err-heure');
+  if(selectedDate&&selectedTime){
+    const st=slotStatus(selectedDate,selectedTime);
+    if(st!=='ok'){
+      const msgs={booked:'Ce créneau vient d\'être réservé.',past:'Ce créneau est passé.',soon:'Réservation impossible à moins de 30 minutes.','admin-off':'Ce créneau n\'est pas disponible.'};
+      document.getElementById('err-heure').textContent=msgs[st]||'Créneau indisponible.';
+      showErr('err-heure'); valid=false;
+    }
+  }
+  const lieu=document.getElementById('locLieu').value;
+  if(!lieu||(lieu==='AUTRE'&&!document.getElementById('locAutre').value.trim())){showErr('err-loc');valid=false;}else clearErr('err-loc');
+  const phone=document.getElementById('phone').value.trim().replace(/\s/g,'');
+  if(!/^\d{9,}$/.test(phone)){showErr('err-num');valid=false;}else clearErr('err-num');
+
+  if(!valid){
+    const ga=document.getElementById('globalAlert');
+    ga.innerHTML='⚠️ Veuillez remplir correctement tous les champs obligatoires (★).';
+    ga.classList.add('show'); ga.style.display='flex';
+    document.querySelector('.field-error-msg.show')?.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+
+  if(!window._firebaseReady){alert('Connexion en cours, réessayez dans quelques secondes.');return;}
+
+  const chambre=document.getElementById('locChambre').value.trim();
+  const pavillon=document.getElementById('locPavillon').value.trim();
+  const autrePrec=document.getElementById('locAutre').value.trim();
+  const modelPrec=document.getElementById('modelPrecision').value.trim();
+  const total=getTotal();
+  const locStr=lieu==='AUTRE'?autrePrec:[chambre?`Ch.${chambre}`:'',pavillon?`Pav.${pavillon}`:'',lieu].filter(Boolean).join(' · ');
+
+  const booking={
+    date:selectedDate, time:selectedTime,
+    model:model+(modelPrec?` (${modelPrec})`:''),
+    barbe, teinte, location:locStr, phone,
+    total:total!==null?total:0,
+    timestamp:Date.now()
+  };
+
+  document.getElementById('loadingOverlay').classList.add('show');
+  document.getElementById('submitBtn').disabled=true;
+
+  try {
+    const newRef=window._push(window._ref(window._db,'bookings'));
+    await window._set(newRef,booking);
+
+    document.getElementById('loadingOverlay').classList.remove('show');
+    document.getElementById('bookingForm').style.display='none';
+    document.getElementById('successDetails').innerHTML=`
+      <div class="sc-row"><span class="label">Date</span><span>${formatDate(selectedDate)}</span></div>
+      <div class="sc-row"><span class="label">Heure</span><span>${selectedTime} – ${addHalf(selectedTime)}</span></div>
+      <div class="sc-row"><span class="label">Modèle</span><span>${booking.model}</span></div>
+      <div class="sc-row"><span class="label">Barbe</span><span>${barbe}</span></div>
+      <div class="sc-row"><span class="label">Teinte Noir</span><span>${teinte}</span></div>
+      <div class="sc-row"><span class="label">Localisation</span><span>${locStr}</span></div>
+      <div class="sc-row"><span class="label">Numéro</span><span>${phone}</span></div>
+      <div class="sc-row"><span class="label">Tarif</span><span style="color:var(--gold);font-weight:700;">${total!==null?total+' F CFA':'À définir'}</span></div>`;
+    document.getElementById('successScreen').classList.add('show');
+    window.scrollTo({top:document.getElementById('rdv').offsetTop-80,behavior:'smooth'});
+  } catch(e){
+    document.getElementById('loadingOverlay').classList.remove('show');
+    document.getElementById('submitBtn').disabled=false;
+    alert('Erreur de connexion. Vérifiez votre internet et réessayez.');
+  }
+}
+
+function resetForm(){
+  document.getElementById('successScreen').classList.remove('show');
+  document.getElementById('bookingForm').style.display='block';
+  document.getElementById('bookingForm').querySelectorAll('input[type="radio"]').forEach(r=>r.checked=false);
+  document.getElementById('bookingForm').querySelectorAll('.text-input').forEach(i=>i.value='');
+  document.getElementById('modelPrecisionWrap').classList.remove('show');
+  document.getElementById('locAutreWrap').style.display='none';
+  document.getElementById('fb-heure').style.display='none';
+  document.getElementById('priceCard').classList.remove('show');
+  document.getElementById('globalAlert').classList.remove('show');
+  document.querySelectorAll('.field-error-msg').forEach(e=>e.classList.remove('show'));
+  document.getElementById('submitBtn').disabled=false;
+  selectedDate=null; selectedTime=null;
+  buildDateGrid();
+  window.scrollTo({top:document.getElementById('rdv').offsetTop-80,behavior:'smooth'});
+}
+
+// ── ADMIN ──
+function showAdminLogin(){document.getElementById('loginModal').classList.add('show');document.getElementById('adminPassInput').value='';document.getElementById('loginError').classList.remove('show');setTimeout(()=>document.getElementById('adminPassInput').focus(),100);}
+function closeLoginModal(){document.getElementById('loginModal').classList.remove('show');}
+function checkAdmin(){
+  if(document.getElementById('adminPassInput').value===ADMIN_PASS){closeLoginModal();openAdmin();}
+  else{document.getElementById('loginError').classList.add('show');document.getElementById('adminPassInput').value='';}
+}
+function openAdmin(){
+  document.getElementById('adminPanel').classList.add('show');
+  document.getElementById('adminPanel').scrollIntoView({behavior:'smooth'});
+  updateStats(); renderBookingsTable(); renderSlotManager();
+}
+function adminLogout(){document.getElementById('adminPanel').classList.remove('show');}
+function switchTab(name,btn){
+  document.querySelectorAll('.a-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.a-content').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='qr') initQR();
+}
+
+function updateStats(){
+  const bookings=window._bookings||[];
+  const todayStr=dateStr2today();
+  const now=new Date(); const ws=new Date(now); ws.setDate(now.getDate()-now.getDay());
+  const weekStr=`${ws.getFullYear()}-${String(ws.getMonth()+1).padStart(2,'0')}-${String(ws.getDate()).padStart(2,'0')}`;
+  document.getElementById('statTotal').textContent=bookings.length;
+  document.getElementById('statToday').textContent=bookings.filter(b=>b.date===todayStr).length;
+  document.getElementById('statWeek').textContent=bookings.filter(b=>b.date>=weekStr).length;
+  document.getElementById('statRevenue').textContent=bookings.reduce((s,b)=>s+(b.total||0),0).toLocaleString('fr');
+}
+
+function renderBookingsTable(){
+  const bookings=(window._bookings||[]).slice().sort((a,b)=>b.timestamp-a.timestamp);
+  const tbody=document.getElementById('bookingsTbody');
+  if(!bookings.length){tbody.innerHTML='<tr><td colspan="8" class="b-empty">Aucune réservation pour l\'instant.</td></tr>';return;}
+  tbody.innerHTML=bookings.map((b,i)=>`
+    <tr>
+      <td><span class="badge badge-gold">${bookings.length-i}</span></td>
+      <td style="white-space:nowrap"><strong>${formatDate(b.date)}</strong><br><span style="color:var(--gold)">${b.time} – ${addHalf(b.time)}</span></td>
+      <td>${b.model}</td>
+      <td><span class="badge badge-${b.barbe==='OUI'?'green':''}">Barbe: ${b.barbe}</span><br><span class="badge badge-${b.teinte==='OUI'?'green':''}">Teinte: ${b.teinte}</span></td>
+      <td style="font-size:0.72rem">${b.location}</td>
+      <td>${b.phone}</td>
+      <td style="color:var(--gold);font-weight:700;white-space:nowrap">${b.total?b.total+' F':'—'}</td>
+      <td><button class="del-btn" onclick="deleteBooking('${b.fbKey}')">✕</button></td>
+    </tr>`).join('');
+}
+
+async function deleteBooking(fbKey){
+  if(!confirm('Supprimer cette réservation ?')) return;
+  await window._remove(window._ref(window._db,`bookings/${fbKey}`));
+}
+async function clearAllBookings(){
+  if(!confirm('Effacer TOUTES les réservations ? Irréversible.')) return;
+  await window._remove(window._ref(window._db,'bookings'));
+}
+
+// ── SLOT MANAGER ──
+function renderSlotManager(){
+  const container=document.getElementById('slotManager');
+  container.innerHTML='';
+  for(let dow=0;dow<7;dow++){
+    const slots=getSlots(dow);
+    const allSlots=[...new Set([...DEFAULT_SCHEDULE[dow],...slots])].sort();
+    const panel=document.createElement('div');
+    panel.className='day-panel';
+    panel.innerHTML=`
+      <div class="day-panel-header"><span class="day-name-badge">${DAY_FULL[dow]}</span><span style="font-size:0.65rem;color:var(--text-muted)">${slots.length} créneau(x)</span></div>
+      <div class="slot-chips" id="chips_${dow}"></div>
+      <div class="add-slot-row"><input type="time" class="add-slot-input" id="addSlotInput_${dow}" step="1800"><button class="add-slot-btn" onclick="addSlot(${dow})">+ Ajouter</button></div>`;
+    container.appendChild(panel);
+    const chipsDiv=panel.querySelector(`#chips_${dow}`);
+    allSlots.forEach(t=>{
+      const isOn=slots.includes(t);
+      const chip=document.createElement('div');
+      chip.className=`slot-chip ${isOn?'on':'off'}`;
+      chip.innerHTML=`<span class="dot"></span>${t}`;
+      chip.onclick=()=>toggleSlot(dow,t);
+      chipsDiv.appendChild(chip);
+    });
+  }
+}
+
+async function toggleSlot(dow,time){
+  let slots=[...getSlots(dow)];
+  const idx=slots.indexOf(time);
+  if(idx>=0) slots.splice(idx,1); else slots.push(time);
+  slots.sort();
+  const config=window._slotConfig||{};
+  config[dow]=slots;
+  await window._set(window._ref(window._db,'slotConfig'),config);
+}
+
+async function addSlot(dow){
+  const inp=document.getElementById(`addSlotInput_${dow}`);
+  if(!inp.value){alert('Entrez une heure.');return;}
+  const parts=inp.value.split(':');
+  const time=`${parts[0].padStart(2,'0')}:${parts[1].padStart(2,'0')}`;
+  let slots=[...getSlots(dow)];
+  if(slots.includes(time)){alert('Ce créneau existe déjà.');return;}
+  slots.push(time); slots.sort();
+  const config=window._slotConfig||{};
+  config[dow]=slots;
+  await window._set(window._ref(window._db,'slotConfig'),config);
+  inp.value='';
+}
+
+// ── QR ──
+let qrInstance=null;
+function initQR(){
+  document.getElementById('qrUrlInput').value=window.location.href;
+  generateQR();
+}
+function generateQR(){
+  const url=document.getElementById('qrUrlInput').value||window.location.href;
+  const container=document.getElementById('qrCanvas');
+  container.innerHTML='';
+  qrInstance=new QRCode(container,{text:url,width:220,height:220,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.H});
+}
+function downloadQR(){
+  const canvas=document.getElementById('qrCanvas').querySelector('canvas');
+  if(!canvas){alert('Générez d\'abord le QR Code.');return;}
+  const a=document.createElement('a'); a.download='nomade-coiffure-qr.png'; a.href=canvas.toDataURL('image/png'); a.click();
+}
+
+setInterval(()=>{if(selectedDate)buildTimeGrid(selectedDate);buildDateGrid();},60000);
+</script>
+</body>
+</html>
